@@ -17,6 +17,11 @@ $ python3 -m venv .venv
 $ source .venv/bin/activate
 (.venv) $ pip install -r requirements.txt
 ```
+Для запуска введите
+```shell
+$ python3 bot.py
+```
+
 Для выхода из виртуального окружения проекта введите:
 ```shell
 (.venv) $ deactivate
