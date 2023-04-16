@@ -17,3 +17,7 @@ $ python3 -m venv .venv
 $ source .venv/bin/activate
 (.venv) $ pip install -r requirements.txt
 ```
+Для выхода из виртуального окружения проекта введите:
+```shell
+(.venv) $ deactivate
+```
