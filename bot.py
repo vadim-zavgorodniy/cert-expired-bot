@@ -1,6 +1,8 @@
 import telebot
 from telebot import types
 
+from functools import wraps
+
 import bot_config as conf
 from storage import CertStore, CertModel, ParseError
 
@@ -14,12 +16,21 @@ date; common_name; description
 def getCertStore():
     return CertStore(conf.DB_FILE_NAME)
 
+# ------------------------------------------------------------
+def log_error(func):
+    @wraps(func)
+    def log_error_decorator(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            print(str(e.__class__) + ": Ошибка при работе с меню:" + str(e))
+    return log_error_decorator
 
 # ------------------------------------------------------------
 @bot.message_handler(content_types=["text"])
+@log_error
 def start(message):
-    store = getCertStore()
-    try:
+    with getCertStore() as store:
         if message.text == '/list':
             cert_list = store.find_all_certs(message.from_user.id)
             if not len(cert_list):
@@ -42,11 +53,9 @@ def start(message):
         else:
             bot.send_message(message.from_user.id,
                              "Доступные команды: /list /add /del")
-    finally:
-        store.close()
-
 
 # ------------------------------------------------------------
+@log_error
 def add_cert(message):  # добавляем данные сертификата
     new_cert = {}
     try:
@@ -56,8 +65,7 @@ def add_cert(message):  # добавляем данные сертификата
                          "Проблема :(\n{}\n".format(e) + _ADD_NEW_CERT_TEXT)
         return
 
-    store = getCertStore()
-    try:
+    with getCertStore() as store:
         rows = store.find_by_cn(message.from_user.id, new_cert.cn)
         if len(rows):
             bot.send_message(
@@ -70,14 +78,12 @@ def add_cert(message):  # добавляем данные сертификата
             store.add_cert(new_cert)
             bot.send_message(message.from_user.id,
                              "Данные сохранены:\n" + message.text)
-    finally:
-        store.close()
 
 
 # ------------------------------------------------------------
+@log_error
 def del_cert(message):  # удаляем сертификат
-    store = getCertStore()
-    try:
+    with getCertStore() as store:
         rows = store.find_by_cn(message.from_user.id, message.text.strip())
         if not len(rows):
             bot.send_message(
@@ -89,9 +95,8 @@ def del_cert(message):  # удаляем сертификат
             store.delete_cert(message.from_user.id, rows[0].id)
             bot.send_message(message.from_user.id,
                              "Данные удалены:\n" + str(rows[0]))
-    finally:
-        store.close()
 
 
 # ------------------------------------------------------------
-bot.polling(none_stop=True, interval=0)
+if __name__ == "__main__":
+    bot.polling(none_stop=True, interval=0)
