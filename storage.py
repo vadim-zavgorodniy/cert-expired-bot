@@ -58,6 +58,12 @@ class CertStore:
 
         self._create_table(self._CREATE_CERT_TABLE)
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
     def add_cert(self, cert):
         try:
             cur = self.conn.cursor()
