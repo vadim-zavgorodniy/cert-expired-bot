@@ -2,10 +2,10 @@ import telebot
 
 from functools import wraps
 
-import bot_config as conf
-from storage import CertStore, CertModel, ParseError
+import config as conf
+from .storage import CertStore, CertModel, ParseError
 
-from bot_logger import get_logger
+from .logger import get_logger
 
 _logger = get_logger(__name__)
 _bot = telebot.TeleBot(conf.BOT_TOKEN)
@@ -14,10 +14,6 @@ _ADD_NEW_CERT_TEXT = """Введите данные о сертификате в
 date; common_name; description
 Например:
 10.08.2023; test.my-domain.ru; TLS сертификат тестового домена"""
-
-
-def getCertStore():
-    return CertStore(conf.DB_FILE_NAME)
 
 
 # ------------------------------------------------------------
@@ -34,10 +30,21 @@ def log_error(func):
 
 
 # ------------------------------------------------------------
+@log_error
+def run_bot():
+    _bot.polling(none_stop=True, interval=0)
+
+
+# ------------------------------------------------------------
+def _getCertStore():
+    return CertStore(conf.DB_FILE_NAME)
+
+
+# ------------------------------------------------------------
 @_bot.message_handler(content_types=["text"])
 @log_error
-def start(message):
-    with getCertStore() as store:
+def _start(message):
+    with _getCertStore() as store:
         if message.text == "/list":
             cert_list = store.find_all_certs(message.from_user.id)
             if not len(cert_list):
@@ -51,12 +58,12 @@ def start(message):
         elif message.text == "/add":
             _bot.send_message(message.from_user.id, _ADD_NEW_CERT_TEXT)
             _bot.register_next_step_handler(
-                message, add_cert)  # следующий шаг – функция add_cert
+                message, _add_cert)  # следующий шаг – функция add_cert
         elif message.text == "/del":
             _bot.send_message(message.from_user.id,
                               "Для удаления укажите common name сертификата.")
             _bot.register_next_step_handler(
-                message, del_cert)  # следующий шаг – функция del_cert
+                message, _del_cert)  # следующий шаг – функция del_cert
         else:
             _bot.send_message(message.from_user.id,
                               "Доступные команды: /list /add /del")
@@ -64,7 +71,7 @@ def start(message):
 
 # ------------------------------------------------------------
 @log_error
-def add_cert(message):  # добавляем данные сертификата
+def _add_cert(message):  # добавляем данные сертификата
     new_cert = {}
     try:
         new_cert = CertModel.from_string(message.text)
@@ -73,7 +80,7 @@ def add_cert(message):  # добавляем данные сертификата
                           "Проблема :(\n{}\n".format(e) + _ADD_NEW_CERT_TEXT)
         return
 
-    with getCertStore() as store:
+    with _getCertStore() as store:
         rows = store.find_by_cn(message.from_user.id, new_cert.cn)
         if len(rows):
             _bot.send_message(
@@ -89,8 +96,8 @@ def add_cert(message):  # добавляем данные сертификата
 
 # ------------------------------------------------------------
 @log_error
-def del_cert(message):  # удаляем сертификат
-    with getCertStore() as store:
+def _del_cert(message):  # удаляем сертификат
+    with _getCertStore() as store:
         rows = store.find_by_cn(message.from_user.id, message.text.strip())
         if not len(rows):
             _bot.send_message(
@@ -99,8 +106,3 @@ def del_cert(message):  # удаляем сертификат
         else:
             store.delete_cert(message.from_user.id, rows[0].id)
             _bot.send_message(message.from_user.id, "Данные удалены:\n" + str(rows[0]))
-
-
-# ------------------------------------------------------------
-if __name__ == "__main__":
-    _bot.polling(none_stop=True, interval=0)

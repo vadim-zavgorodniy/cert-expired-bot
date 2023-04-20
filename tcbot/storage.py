@@ -1,7 +1,7 @@
 import sqlite3
 from sqlite3 import Error
 
-from bot_logger import get_logger
+from .logger import get_logger
 
 _logger = get_logger(__name__)
 

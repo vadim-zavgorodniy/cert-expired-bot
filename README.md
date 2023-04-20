@@ -19,7 +19,7 @@ $ source .venv/bin/activate
 ```
 Для запуска введите
 ```shell
-$ python3 src/bot.py
+$ python3 main.py
 ```
 
 Для выхода из виртуального окружения проекта введите:
