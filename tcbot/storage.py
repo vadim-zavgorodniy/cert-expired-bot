@@ -17,15 +17,25 @@ class ParseError(Exception):
 class CertModel:
     # _INPUT_FIELDS = ("exp_date", "cn", "description")
 
-    def __init__(self, db_row):
+    def __init__(self, id, user_id, cn, description, exp_date):
         """На вход ожидает кортеж формата:
         (id, user_id, common_namen, description, exp_date)
         """
-        self.id = db_row[0]
-        self.user_id = db_row[1]
-        self.cn = db_row[2]
-        self.description = db_row[3]
-        self.exp_date = db_row[4]
+        self.id = id
+        self.user_id = user_id
+        self.cn = cn
+        self.description = description
+        self.exp_date = exp_date
+
+    def from_db_row(db_row):
+        """На вход ожидает кортеж формата:
+        (id, user_id, common_namen, description, exp_date)
+        """
+        return CertModel(id=db_row[0],
+                         user_id=db_row[1],
+                         cn=db_row[2],
+                         description=db_row[3],
+                         exp_date=db_row[4])
 
     def __str__(self):
         return "{}; {}; {}".format(self.exp_date, self.cn, self.description)
@@ -38,8 +48,11 @@ class CertModel:
         if len(parts) != 3:
             raise ParseError("Не удалось разобрать данные: " + cert_str)
 
-        return CertModel(
-            (None, None, parts[1].strip(), parts[2].strip(), parts[0].strip()))
+        return CertModel(id=None,
+                         user_id=None,
+                         cn=parts[1].strip(),
+                         description=parts[2].strip(),
+                         exp_date=parts[0].strip())
 
 
 # ------------------------------------------------------------
@@ -133,7 +146,7 @@ class CertStore:
         self.conn.close()
 
     def rows_to_cert_model(rows):
-        return [CertModel(row) for row in rows]
+        return [CertModel.from_db_row(row) for row in rows]
 
     def _create_connection(self, db_file):
         """ Create database connection to SQLite database
