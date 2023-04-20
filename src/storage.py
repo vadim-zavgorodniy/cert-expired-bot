@@ -38,12 +38,14 @@ class CertModel:
         if len(parts) != 3:
             raise ParseError("Не удалось разобрать данные: " + cert_str)
 
-        return CertModel((None, None, parts[1].strip(), parts[2].strip(), parts[0].strip()))
+        return CertModel(
+            (None, None, parts[1].strip(), parts[2].strip(), parts[0].strip()))
 
 
 # ------------------------------------------------------------
 class CertStore:
     _ALL_DB_FIELDS = ("id", "user_id", "cn", "description", "exp_date")
+    _ALL_DB_FIELDS_STR = ",".join(_ALL_DB_FIELDS)
     _INSERT_DB_FIELDS = ("user_id", "cn", "description", "exp_date")
     _INSERT_DB_FIELDS_STR = ",".join(_INSERT_DB_FIELDS)
 
@@ -70,8 +72,10 @@ class CertStore:
     def add_cert(self, cert):
         try:
             cur = self.conn.cursor()
-            cur.execute(f"insert into cert( {CertStore._INSERT_DB_FIELDS_STR} ) values(?,?,?,?);",
-                        (cert.user_id, cert.cn, cert.description, cert.exp_date))
+            cur.execute(
+                f"insert into cert( {CertStore._INSERT_DB_FIELDS_STR} ) " +
+                "values(?,?,?,?);",
+                (cert.user_id, cert.cn, cert.description, cert.exp_date))
             self.conn.commit()
             cert.id = cur.lastrowid
         except Error as e:
@@ -82,7 +86,8 @@ class CertStore:
     def delete_cert(self, user_id, cert_id):
         try:
             cur = self.conn.cursor()
-            cur.execute("delete from cert where id = ? and user_id = ?;", (cert_id, user_id))
+            cur.execute("delete from cert where id = ? and user_id = ?;",
+                        (cert_id, user_id))
             self.conn.commit()
         except Error as e:
             _logger.exception("Ошибка удаления записи из БД: " + str(e))
@@ -91,8 +96,9 @@ class CertStore:
     def get_cert(self, user_id, cert_id):
         try:
             cur = self.conn.cursor()
-            cur.execute("select id, user_id, cn, description, exp_date from cert where id = ? and user_id = ?;",
-                        (cert_id, user_id))
+            cur.execute(
+                f"select {CertStore._ALL_DB_FIELDS_STR} from cert " +
+                "where id = ? and user_id = ?;", (cert_id, user_id))
             rows = cur.fetchall()
         except Error as e:
             _logger.exception("Ошибка получения записи из БД: " + str(e))
@@ -102,8 +108,9 @@ class CertStore:
     def find_by_cn(self, user_id, common_name):
         try:
             cur = self.conn.cursor()
-            cur.execute("select id, user_id, cn, description, exp_date from cert where user_id = ? and cn = ?;",
-                        (user_id, common_name))
+            cur.execute(
+                f"select {CertStore._ALL_DB_FIELDS_STR} from cert " +
+                "where user_id = ? and cn = ?;", (user_id, common_name))
             rows = cur.fetchall()
         except Error as e:
             _logger.exception("Ошибка поиска записи в БД: " + str(e))
@@ -114,8 +121,8 @@ class CertStore:
         try:
             cur = self.conn.cursor()
             cur.execute(
-                "select id, user_id, cn, description, exp_date from cert where user_id = ? order by exp_date, cn desc;",
-                (user_id, ))
+                f"select {CertStore._ALL_DB_FIELDS_STR} from cert " +
+                "where user_id = ? order by exp_date, cn desc;", (user_id, ))
             rows = cur.fetchall()
         except Error as e:
             print(e)

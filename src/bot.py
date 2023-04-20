@@ -41,19 +41,25 @@ def start(message):
         if message.text == "/list":
             cert_list = store.find_all_certs(message.from_user.id)
             if not len(cert_list):
-                _bot.send_message(message.from_user.id,
-                                  "Вы еще не добавили ни одного сертификата.\nДля добавления введите /add")
+                _bot.send_message(
+                    message.from_user.id,
+                    "Вы еще не добавили ни одного сертификата.\n" +
+                    "Для добавления введите /add")
             else:
                 result = CertModel.list_to_string_list(cert_list)
                 _bot.send_message(message.from_user.id, "\n".join(result))
         elif message.text == "/add":
             _bot.send_message(message.from_user.id, _ADD_NEW_CERT_TEXT)
-            _bot.register_next_step_handler(message, add_cert)  # следующий шаг – функция add_cert
+            _bot.register_next_step_handler(
+                message, add_cert)  # следующий шаг – функция add_cert
         elif message.text == "/del":
-            _bot.send_message(message.from_user.id, "Для удаления укажите common name сертификата.")
-            _bot.register_next_step_handler(message, del_cert)  # следующий шаг – функция del_cert
+            _bot.send_message(message.from_user.id,
+                              "Для удаления укажите common name сертификата.")
+            _bot.register_next_step_handler(
+                message, del_cert)  # следующий шаг – функция del_cert
         else:
-            _bot.send_message(message.from_user.id, "Доступные команды: /list /add /del")
+            _bot.send_message(message.from_user.id,
+                              "Доступные команды: /list /add /del")
 
 
 # ------------------------------------------------------------
@@ -63,18 +69,22 @@ def add_cert(message):  # добавляем данные сертификата
     try:
         new_cert = CertModel.from_string(message.text)
     except ParseError as e:
-        _bot.send_message(message.from_user.id, "Проблема :(\n{}\n".format(e) + _ADD_NEW_CERT_TEXT)
+        _bot.send_message(message.from_user.id,
+                          "Проблема :(\n{}\n".format(e) + _ADD_NEW_CERT_TEXT)
         return
 
     with getCertStore() as store:
         rows = store.find_by_cn(message.from_user.id, new_cert.cn)
         if len(rows):
-            _bot.send_message(message.from_user.id,
-                              "Похоже, что такой сертификат уже учтен. Можно его удалить - /del\n" + rows[0])
+            _bot.send_message(
+                message.from_user.id,
+                "Похоже, что такой сертификат уже учтен. Можно его удалить - /del\n" +
+                str(rows[0]))
         else:
             new_cert.user_id = message.from_user.id
             store.add_cert(new_cert)
-            _bot.send_message(message.from_user.id, "Данные сохранены:\n" + message.text)
+            _bot.send_message(message.from_user.id,
+                              "Данные сохранены:\n" + message.text)
 
 
 # ------------------------------------------------------------
@@ -83,8 +93,9 @@ def del_cert(message):  # удаляем сертификат
     with getCertStore() as store:
         rows = store.find_by_cn(message.from_user.id, message.text.strip())
         if not len(rows):
-            _bot.send_message(message.from_user.id,
-                              "Сертификат с таким CN не найден. Можно проверить его наличие с помощью /list")
+            _bot.send_message(
+                message.from_user.id, "Сертификат с таким CN не найден. " +
+                "Можно проверить его наличие с помощью /list")
         else:
             store.delete_cert(message.from_user.id, rows[0].id)
             _bot.send_message(message.from_user.id, "Данные удалены:\n" + str(rows[0]))
