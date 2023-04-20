@@ -2,7 +2,7 @@ import logging
 import logging.config
 import os
 
-import config
+import tcbot.config as config
 
 _LOGGER_CONFIG_FILE_NAME = os.path.join(config.PROJECT_ROOT_DIR, "logger.conf")
 

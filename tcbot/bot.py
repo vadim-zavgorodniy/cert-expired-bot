@@ -2,13 +2,13 @@ import telebot
 
 from functools import wraps
 
-import config as conf
-from .storage import CertStore, CertModel, ParseError
+import tcbot.config as config
+from tcbot.storage import CertStore, CertModel, ParseError
 
-from .logger import get_logger
+from tcbot.logger import get_logger
 
 _logger = get_logger(__name__)
-_bot = telebot.TeleBot(conf.BOT_TOKEN)
+_bot = telebot.TeleBot(config.BOT_TOKEN)
 
 _ADD_NEW_CERT_TEXT = """Введите данные о сертификате в формате
 date; common_name; description
@@ -37,7 +37,7 @@ def run_bot():
 
 # ------------------------------------------------------------
 def _getCertStore():
-    return CertStore(conf.DB_FILE_NAME)
+    return CertStore(config.DB_FILE_NAME)
 
 
 # ------------------------------------------------------------

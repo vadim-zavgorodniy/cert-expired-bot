@@ -3,8 +3,11 @@
 # ------------------------------------------------------------
 
 import os
+import utils.path
 
-PROJECT_ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+# PROJECT_ROOT_DIR1 = os.path.dirname(os.path.abspath(__file__))
+# PROJECT_ROOT_DIR = Path(__file__).parent.parent
+PROJECT_ROOT_DIR = utils.path.get_project_root()
 
 DB_FILE_NAME = os.path.join(PROJECT_ROOT_DIR, "bot_sqlite.db")
 

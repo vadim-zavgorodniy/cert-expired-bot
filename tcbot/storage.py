@@ -1,7 +1,7 @@
 import sqlite3
 from sqlite3 import Error
 
-from .logger import get_logger
+from tcbot.logger import get_logger
 
 _logger = get_logger(__name__)
 
