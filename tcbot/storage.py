@@ -18,9 +18,6 @@ class CertModel:
     # _INPUT_FIELDS = ("exp_date", "cn", "description")
 
     def __init__(self, id, user_id, cn, description, exp_date):
-        """На вход ожидает кортеж формата:
-        (id, user_id, common_namen, description, exp_date)
-        """
         self.id = id
         self.user_id = user_id
         self.cn = cn
