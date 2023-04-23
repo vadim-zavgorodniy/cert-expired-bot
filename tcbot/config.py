@@ -1,6 +1,4 @@
-# ------------------------------------------------------------
-# Конфигурация бота
-# ------------------------------------------------------------
+"""Конфигурация бота"""
 
 import os
 import utils.path
@@ -15,7 +13,7 @@ _TOKEN_FILE_NAME = os.path.join(PROJECT_ROOT_DIR, "token.txt")
 BOT_TOKEN = None
 
 try:
-    with open(_TOKEN_FILE_NAME, "r") as f:
+    with open(_TOKEN_FILE_NAME, mode="r", encoding="utf-8") as f:
         BOT_TOKEN = f.readline().strip()
 except Exception:
     print("Ошибка чтениия файла с токеном доступа к telegram боту: " + _TOKEN_FILE_NAME)

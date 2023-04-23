@@ -1,8 +1,13 @@
-import telebot
+"""Основной модуль с логикой работы бота."""
+
 
 from functools import wraps
+from typing import Callable, TypeVar
+from typing_extensions import ParamSpec
+import telebot
+from telebot.types import Message
 
-import tcbot.config as config
+from tcbot import config
 from tcbot.storage import CertStore, CertModel, ParseError
 
 from tcbot.logger import get_logger
@@ -16,38 +21,45 @@ date; common_name; description
 10.08.2023; test.my-domain.ru; TLS сертификат тестового домена"""
 
 
-# ------------------------------------------------------------
-def log_error(func):
+RetT = TypeVar("RetT")
+ArgT = ParamSpec("ArgT")
 
+
+# ------------------------------------------------------------
+def log_error(func: Callable[ArgT, None]) -> Callable[ArgT, None]:
+    """Декоратор для логирования исключений. Исключения поглощаются декоратором."""
     @wraps(func)
-    def log_error_decorator(*args, **kwargs):
+    def log_error_decorator(*args: ArgT.args, **kwargs: ArgT.kwargs) -> None:
         try:
-            return func(*args, **kwargs)
-        except Exception:
-            _logger.exception(str("Ошибка при работе с меню."))
+            func(*args, **kwargs)
+        except Exception as exc:
+            _logger.exception("%s Ошибка при работе с меню: %s", type(exc), exc)
 
     return log_error_decorator
 
 
 # ------------------------------------------------------------
 @log_error
-def run_bot():
+def run_bot() -> None:
+    """Основная функция запускающая работу бота."""
     _bot.polling(none_stop=True, interval=0)
 
 
 # ------------------------------------------------------------
-def _getCertStore():
+def _get_cert_store() -> CertStore:
+    """Возвращает новый экземпляр для рабты с хранилищем сертификатов CertStore"""
     return CertStore(config.DB_FILE_NAME)
 
 
 # ------------------------------------------------------------
 @_bot.message_handler(content_types=["text"])
 @log_error
-def _start(message):
-    with _getCertStore() as store:
+def _start(message: Message) -> None:
+    """Функция начала работы с ботом. Выводит меню доступных команд."""
+    with _get_cert_store() as store:
         if message.text == "/list":
             cert_list = store.find_all_certs(message.from_user.id)
-            if not len(cert_list):
+            if len(cert_list) == 0:
                 _bot.send_message(
                     message.from_user.id,
                     "Вы еще не добавили ни одного сертификата.\n" +
@@ -71,17 +83,18 @@ def _start(message):
 
 # ------------------------------------------------------------
 @log_error
-def _add_cert(message):  # добавляем данные сертификата
-    new_cert = {}
+def _add_cert(message: Message) -> None:
+    """Добавляет данные сертификата пользователя в хранилище"""
+    new_cert: CertModel
     try:
         new_cert = CertModel.from_string(message.text)
-    except ParseError as e:
+    except ParseError as exc:
         _bot.send_message(message.from_user.id,
-                          "Проблема :(\n{}\n".format(e) + _ADD_NEW_CERT_TEXT)
+                          f"Проблема :(\n{exc}\n" + _ADD_NEW_CERT_TEXT)
         return
 
-    with _getCertStore() as store:
-        rows = store.find_by_cn(message.from_user.id, new_cert.cn)
+    with _get_cert_store() as store:
+        rows = store.find_by_cn(message.from_user.id, new_cert.common_name)
         if len(rows):
             _bot.send_message(
                 message.from_user.id,
@@ -96,13 +109,15 @@ def _add_cert(message):  # добавляем данные сертификат�
 
 # ------------------------------------------------------------
 @log_error
-def _del_cert(message):  # удаляем сертификат
-    with _getCertStore() as store:
+def _del_cert(message: Message) -> None:
+    """Удаляет данные сертификата пользователя из хранилищащ"""
+    with _get_cert_store() as store:
         rows = store.find_by_cn(message.from_user.id, message.text.strip())
-        if not len(rows):
+        if len(rows) == 0:
             _bot.send_message(
                 message.from_user.id, "Сертификат с таким CN не найден. " +
                 "Можно проверить его наличие с помощью /list")
         else:
-            store.delete_cert(message.from_user.id, rows[0].id)
+            assert rows[0].rec_id is not None
+            store.delete_cert(message.from_user.id, rows[0].rec_id)
             _bot.send_message(message.from_user.id, "Данные удалены:\n" + str(rows[0]))
