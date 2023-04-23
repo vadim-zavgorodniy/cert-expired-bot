@@ -151,7 +151,7 @@ class CertStore:
             rows = cur.fetchall()
         except Error as exc:
             _logger.exception("%s Ошибка поиска записи в БД: %s", type(exc), exc)
-            raise exc
+            raise
         return CertStore.rows_to_cert_model(rows)
 
     def find_all_certs(self, user_id: int) -> List[CertModel]:
@@ -164,7 +164,7 @@ class CertStore:
             rows = cur.fetchall()
         except Error as exc:
             _logger.exception("%s Ошибка получения записи из БД: %s", type(exc), exc)
-            raise exc
+            raise
         return CertStore.rows_to_cert_model(rows)
 
     def close(self) -> None:
@@ -187,8 +187,8 @@ class CertStore:
         try:
             self.conn = sqlite3.connect(db_file)
         except Error as exc:
-            print(exc)
-            raise exc
+            _logger.exception("%s Ошибка подключения к БД: %s", type(exc), exc)
+            raise
         return self.conn
 
     def _create_table(self, create_table_sql: str) -> None:
@@ -201,4 +201,5 @@ class CertStore:
             cur = self.conn.cursor()
             cur.execute(create_table_sql)
         except Error as exc:
-            print(exc)
+            _logger.exception("%s Ошибка создания таблицы БД: %s", type(exc), exc)
+            raise
