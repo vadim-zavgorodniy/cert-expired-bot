@@ -15,8 +15,13 @@ Telegram bot для напоминания о своевременном пер�
 ```shell
 $ python3 -m venv .venv
 $ source .venv/bin/activate
-(.venv) $ pip install -r requirements.txt
+(.venv) $ pip install -r requirements-prod.txt
 ```
+Для целей эффективной работы с кодом потребуется так же установить:
+```shell
+(.venv) $ pip install -r requirements-dev.txt
+```
+
 Для запуска введите
 ```shell
 $ python3 main.py
