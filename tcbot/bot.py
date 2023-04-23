@@ -32,7 +32,7 @@ def log_error(func: Callable[ArgT, None]) -> Callable[ArgT, None]:
     def log_error_decorator(*args: ArgT.args, **kwargs: ArgT.kwargs) -> None:
         try:
             func(*args, **kwargs)
-        except Exception as exc:
+        except Exception as exc: # pylint: disable=broad-exception-caught
             _logger.exception("%s Ошибка при работе с меню: %s", type(exc), exc)
 
     return log_error_decorator

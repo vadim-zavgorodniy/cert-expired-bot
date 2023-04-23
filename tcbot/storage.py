@@ -25,6 +25,7 @@ class CertModel:
 
     # _INPUT_FIELDS = ("exp_date", "cn", "description")
 
+    # pylint: disable=too-many-arguments
     def __init__(self, rec_id: Optional[int], user_id: Optional[int], common_name: str,
                  description: str, exp_date: str) -> None:
         self.rec_id = rec_id
