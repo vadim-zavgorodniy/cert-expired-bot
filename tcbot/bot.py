@@ -32,7 +32,7 @@ def log_error(func: Callable[ArgT, None]) -> Callable[ArgT, None]:
     def log_error_decorator(*args: ArgT.args, **kwargs: ArgT.kwargs) -> None:
         try:
             func(*args, **kwargs)
-        except Exception as exc: # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             _logger.exception("%s Ошибка при работе с меню: %s", type(exc), exc)
 
     return log_error_decorator
@@ -65,7 +65,7 @@ def _start(message: Message) -> None:
                     "Вы еще не добавили ни одного сертификата.\n" +
                     "Для добавления введите /add")
             else:
-                result = CertModel.list_to_string_list(cert_list)
+                result = CertModel.seq_to_string_list(cert_list)
                 _bot.send_message(message.from_user.id, "\n".join(result))
         elif message.text == "/add":
             _bot.send_message(message.from_user.id, _ADD_NEW_CERT_TEXT)
@@ -92,14 +92,18 @@ def _add_cert(message: Message) -> None:
         _bot.send_message(message.from_user.id,
                           f"Проблема :(\n{exc}\n" + _ADD_NEW_CERT_TEXT)
         return
+    except ValueError as exc:
+        _bot.send_message(message.from_user.id,
+                          f"Проблема :(\n{exc}\n" + _ADD_NEW_CERT_TEXT)
+        return
 
     with _get_cert_store() as store:
-        rows = store.find_by_cn(message.from_user.id, new_cert.common_name)
-        if len(rows):
+        cert = store.find_by_cn(message.from_user.id, new_cert.common_name)
+        if cert is not None:
             _bot.send_message(
                 message.from_user.id,
                 "Похоже, что такой сертификат уже учтен. Можно его удалить - /del\n" +
-                str(rows[0]))
+                str(cert))
         else:
             new_cert.user_id = message.from_user.id
             store.add_cert(new_cert)
@@ -112,12 +116,12 @@ def _add_cert(message: Message) -> None:
 def _del_cert(message: Message) -> None:
     """Удаляет данные сертификата пользователя из хранилищащ"""
     with _get_cert_store() as store:
-        rows = store.find_by_cn(message.from_user.id, message.text.strip())
-        if len(rows) == 0:
+        cert = store.find_by_cn(message.from_user.id, message.text.strip())
+        if cert is None:
             _bot.send_message(
                 message.from_user.id, "Сертификат с таким CN не найден. " +
                 "Можно проверить его наличие с помощью /list")
         else:
-            assert rows[0].rec_id is not None
-            store.delete_cert(message.from_user.id, rows[0].rec_id)
-            _bot.send_message(message.from_user.id, "Данные удалены:\n" + str(rows[0]))
+            # assert cert[0].rec_id is not None
+            store.delete_cert(cert)
+            _bot.send_message(message.from_user.id, "Данные удалены:\n" + str(cert))

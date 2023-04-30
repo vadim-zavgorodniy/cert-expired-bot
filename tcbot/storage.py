@@ -1,8 +1,14 @@
 """Модуль для работы с сертификатами в БД sqlite3"""
 
-import sqlite3
 from sqlite3 import Error
-from typing import Optional, Tuple, TypeVar, Type, List, Union, Text
+
+from datetime import datetime, date
+
+from typing import Tuple, TypeVar, Type, Optional, Sequence, Any
+
+from sqlalchemy import create_engine, Engine, select
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, Session
+# from sqlalchemy.ext.hybrid import hybrid_property
 
 from tcbot.logger import get_logger
 
@@ -13,6 +19,12 @@ _CertStoreT = TypeVar("_CertStoreT", bound="CertStore")
 
 
 # ------------------------------------------------------------
+# pylint: disable=too-few-public-methods
+class Base(DeclarativeBase):
+    """Базовый класс для описания моделей"""
+
+
+# ------------------------------------------------------------
 class ParseError(Exception):
     """Тип ошибки возникающей при разборе ввода от пользователя"""
 
@@ -20,21 +32,35 @@ class ParseError(Exception):
 # Пример кортежа идущего в БД на вставку
 # (123456, "test.dev.domain.ru", "Тестовый сертификат", '2023-06-10')
 # ------------------------------------------------------------
-class CertModel:
+class CertModel(Base):
     """Модель данных описывающая сертификат"""
 
-    # _INPUT_FIELDS = ("exp_date", "cn", "description")
+    __tablename__ = "cert"
+
+    rec_id: Mapped[int] = mapped_column("id", primary_key=True)
+    user_id: Mapped[int] = mapped_column(nullable=False)
+    common_name: Mapped[str] = mapped_column("cn",
+                                             nullable=False,
+                                             index=True,
+                                             unique=True)
+    description: Mapped[str] = mapped_column(nullable=False)
+    _exp_date: Mapped[date] = mapped_column("exp_date", nullable=False)
 
     # pylint: disable=too-many-arguments
-    def __init__(self, rec_id: Optional[int], user_id: Optional[int], common_name: str,
-                 description: str, exp_date: str) -> None:
-        self.rec_id = rec_id
-        self.user_id = user_id
-        self.common_name = common_name
-        self.description = description
+    def __init__(self, exp_date: str, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
         self.exp_date = exp_date
 
-    def __str__(self) -> str:
+    @property
+    def exp_date(self) -> str:
+        """Получение даты в виде строки"""
+        return self._exp_date.strftime("%d.%m.%Y")
+
+    @exp_date.setter
+    def exp_date(self, exp_date: str) -> None:
+        self._exp_date = datetime.strptime(exp_date, "%d.%m.%Y").date()
+
+    def __repr__(self) -> str:
         return f"{self.exp_date}; {self.common_name}; {self.description}"
 
     @classmethod
@@ -43,16 +69,11 @@ class CertModel:
         """На вход ожидает кортеж формата:
         (rec_id, user_id, common_name, description, exp_date)
         """
-        return cls(db_row[0],
-                   db_row[1],
+        return cls(rec_id=db_row[0],
+                   user_id=db_row[1],
                    common_name=db_row[2],
                    description=db_row[3],
                    exp_date=db_row[4])
-
-    @staticmethod
-    def list_to_string_list(model_list: List[_CertModelT]) -> List[str]:
-        """Конвертирует список объектов CertModel в список строк"""
-        return [str(cert) for cert in model_list]
 
     @classmethod
     def from_string(cls: Type[_CertModelT], cert_str: str) -> _CertModelT:
@@ -70,28 +91,22 @@ class CertModel:
                    description=parts[2].strip(),
                    exp_date=parts[0].strip())
 
+    @staticmethod
+    def seq_to_string_list(model_list: Sequence[_CertModelT]) -> list[str]:
+        """Конвертирует последовательность объектов CertModel в список строк"""
+        return [str(cert) for cert in model_list]
+
 
 # ------------------------------------------------------------
 class CertStore:
-    """Клсаа для работы с сертификатами в БД sqlite3"""
-    _ALL_DB_FIELDS = ("id", "user_id", "cn", "description", "exp_date")
-    _ALL_DB_FIELDS_STR = ",".join(_ALL_DB_FIELDS)
-    _INSERT_DB_FIELDS = ("user_id", "cn", "description", "exp_date")
-    _INSERT_DB_FIELDS_STR = ",".join(_INSERT_DB_FIELDS)
+    """Клсаc для работы с сертификатами в БД sqlite3 через sqlalchemy"""
 
-    _CREATE_CERT_TABLE = """create table if not exists cert(
-    id integer primary key,
-    user_id long,
-    cn string,
-    description string,
-    exp_date date
-    );"""
+    def __init__(self, db_file: str):
+        self.db_file: str = db_file
 
-    def __init__(self, db_file: Union[bytes, Text]):
-        self.db_file = db_file
-        self.conn = self._create_connection(db_file)
-
-        self._create_table(self._CREATE_CERT_TABLE)
+        self.engine: Engine = create_engine(f"sqlite:///{self.db_file}")
+        self._create_tables()
+        self._session: Session = Session(self.engine)
 
     def __enter__(self: _CertStoreT) -> _CertStoreT:
         """Поддержка протокола with, вход в блок with"""
@@ -100,106 +115,72 @@ class CertStore:
     def __exit__(self, exc_type: Type[Exception], exc_value: Exception,
                  traceback: str) -> None:
         """Поддержка протокола with, выход из блока with"""
-        self.close()
+        self._session.close()
+
+    def close(self) -> None:
+        """Закрывает соединение с БД"""
+        self._session.close()
 
     def add_cert(self, cert: CertModel) -> CertModel:
         """Сохраняет новый сертификат в БД"""
         try:
-            cur = self.conn.cursor()
-            cur.execute(
-                f"insert into cert( {CertStore._INSERT_DB_FIELDS_STR} ) " +
-                "values(?,?,?,?);",
-                (cert.user_id, cert.common_name, cert.description, cert.exp_date))
-            self.conn.commit()
-            cert.rec_id = cur.lastrowid
+            self._session.add(cert)
+            self._session.commit()
         except Error as exc:
             _logger.exception("%s Ошибка записи в БД: %s", type(exc), exc)
             raise
         return cert
 
-    def delete_cert(self, user_id: int, cert_id: int) -> None:
+    def delete_cert(self, cert: CertModel) -> None:
         """Удаляет существущий сертификат из БД"""
         try:
-            cur = self.conn.cursor()
-            cur.execute("delete from cert where id = ? and user_id = ?;",
-                        (cert_id, user_id))
-            self.conn.commit()
+            self._session.delete(cert)
+            self._session.commit()
         except Error as exc:
             _logger.exception("%s Ошибка удаления записи из БД: %s", type(exc), exc)
             raise
 
-    def get_cert(self, user_id: int, cert_id: int) -> List[CertModel]:
+    def get_cert(self, user_id: int, cert_id: int) -> Optional[CertModel]:
         """Ищет сертификат в БД по его id для заданного пользователя"""
         try:
-            cur = self.conn.cursor()
-            cur.execute(
-                f"select {CertStore._ALL_DB_FIELDS_STR} from cert " +
-                "where id = ? and user_id = ?;", (cert_id, user_id))
-            rows = cur.fetchall()
+            stmt = select(CertModel).where(CertModel.rec_id == cert_id).where(
+                CertModel.user_id == user_id)
+            return self._session.scalars(stmt).first()
         except Error as exc:
             _logger.exception("%s Ошибка получения записи из БД: %s", type(exc), exc)
             raise
-        return CertStore.rows_to_cert_model(rows)
 
-    def find_by_cn(self, user_id: int, common_name: str) -> List[CertModel]:
+    def find_by_cn(self, user_id: int, common_name: str) -> Optional[CertModel]:
         """Ищет сертификат в БД по его common_name для заданного пользователя"""
         try:
-            cur = self.conn.cursor()
-            cur.execute(
-                f"select {CertStore._ALL_DB_FIELDS_STR} from cert " +
-                "where user_id = ? and cn = ?;", (user_id, common_name))
-            rows = cur.fetchall()
+            stmt = select(CertModel).where(CertModel.user_id == user_id).where(
+                CertModel.common_name == common_name)
+            return self._session.scalars(stmt).first()
         except Error as exc:
             _logger.exception("%s Ошибка поиска записи в БД: %s", type(exc), exc)
             raise
-        return CertStore.rows_to_cert_model(rows)
 
-    def find_all_certs(self, user_id: int) -> List[CertModel]:
+    def find_all_certs(self, user_id: int) -> Sequence[CertModel]:
         """Ищет все сертификаты в БД для заданного пользователя"""
         try:
-            cur = self.conn.cursor()
-            cur.execute(
-                f"select {CertStore._ALL_DB_FIELDS_STR} from cert " +
-                "where user_id = ? order by exp_date, cn desc;", (user_id, ))
-            rows = cur.fetchall()
+            stmt = select(CertModel).where(CertModel.user_id == user_id)
+            return self._session.scalars(stmt).all()
         except Error as exc:
             _logger.exception("%s Ошибка получения записи из БД: %s", type(exc), exc)
             raise
-        return CertStore.rows_to_cert_model(rows)
 
-    def close(self) -> None:
-        """Закрывает соединение с БД"""
-        self.conn.close()
-
-    @staticmethod
-    def rows_to_cert_model(
-            rows: List[Tuple[int, int, str, str, str]]) -> List[CertModel]:
-        """Принимает строки из БД в виде кортежей и возвращает
-        в виде списка объектов CertModel"""
-        return [CertModel.from_db_row(row) for row in rows]
-
-    def _create_connection(self, db_file: Union[bytes, Text]) -> sqlite3.Connection:
-        """ Create database connection to SQLite database
-        specified by db_file
-        param db_file: string with path to db file
-        return: connection object or None
-        """
+    def _create_engine(self, db_file: str) -> Engine:
+        """Создает подключение к БД"""
         try:
-            self.conn = sqlite3.connect(db_file)
+            return create_engine(f"sqlite:///{db_file}")
         except Error as exc:
             _logger.exception("%s Ошибка подключения к БД: %s", type(exc), exc)
             raise
-        return self.conn
 
-    def _create_table(self, create_table_sql: str) -> None:
-        """ create a table from the create_table_sql statement
-        :param conn: Connection object
-        :param create_table_sql: a CREATE TABLE statement
-        :return:
-        """
+    def _create_tables(self) -> None:
+        """Создает все необходимые таблицы"""
         try:
-            cur = self.conn.cursor()
-            cur.execute(create_table_sql)
+            Base.metadata.create_all(self.engine)
         except Error as exc:
-            _logger.exception("%s Ошибка создания таблицы БД: %s", type(exc), exc)
+            _logger.exception("%s Ошибка создания структуры БД: %s", type(exc), exc)
             raise
